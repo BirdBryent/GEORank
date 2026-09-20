@@ -17,6 +17,21 @@ DEFAULT_CHAT_MAX_TOKENS = 4096
 ACTION_PLAN_MAX_TOKENS = 6000
 
 
+def _thinking_control(base_url: str | None) -> dict:
+    """按厂商附加思考控制参数，避免推理预算吃光 max_tokens 导致正文为空。
+
+    DeepSeek 支持完全关闭思考（thinking.type=disabled）；智谱 GLM-5.3 系列无法关闭，
+    只能用 reasoning_effort 压低思考强度。返回值是待并入请求体的原始字段：
+    OpenAI SDK 需放进 extra_body，httpx 直发时直接合并到顶层。
+    """
+    url = (base_url or "").lower()
+    if "deepseek" in url:
+        return {"thinking": {"type": "disabled"}}
+    if "bigmodel" in url:
+        return {"reasoning_effort": "low"}
+    return {}
+
+
 class EmbeddingNotConfiguredError(ValueError):
     """Raised when no dedicated embedding provider is configured."""
 
@@ -164,6 +179,7 @@ class AIClient:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        payload.update(_thinking_control(base_url))
 
         await validate_provider_base_url(base_url)
         async with build_provider_http_client(timeout=60.0) as client:
@@ -258,6 +274,9 @@ class AIClient:
                     }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
+                    _extra = _thinking_control(provider.get("base_url"))
+                    if _extra:
+                        payload["extra_body"] = _extra
                     response = await client.chat.completions.create(**payload)
                     content = response.choices[0].message.content or ""
                     if self._is_blank_text(content):
@@ -289,6 +308,9 @@ class AIClient:
                     }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
+                    _extra = _thinking_control(config.get("llm_base_url"))
+                    if _extra:
+                        payload["extra_body"] = _extra
                     response = await client.chat.completions.create(**payload)
                     content = response.choices[0].message.content or ""
                 if self._is_blank_text(content):
@@ -342,6 +364,9 @@ class AIClient:
                     }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
+                    _extra = _thinking_control(provider.get("base_url"))
+                    if _extra:
+                        payload["extra_body"] = _extra
                     stream = await client.chat.completions.create(**payload)
                     async for chunk in stream:
                         delta = chunk.choices[0].delta.content
@@ -387,6 +412,9 @@ class AIClient:
                     }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
+                    _extra = _thinking_control(config.get("llm_base_url"))
+                    if _extra:
+                        payload["extra_body"] = _extra
                     stream = await client.chat.completions.create(**payload)
                     async for chunk in stream:
                         delta = chunk.choices[0].delta.content
