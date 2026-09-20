@@ -31,6 +31,10 @@ from app.services.company_profile import (
     company_profile_needs_hydration,
     ensure_company_profile,
 )
+from app.services.company_cleanup import (
+    cleanup_company_external_resources,
+    company_storage_keys,
+)
 from app.services.company_ingest import normalize_company_url
 from app.services.company_lookup import company_public_path
 from app.services.company_preview import create_company_preview_token
@@ -1124,12 +1128,16 @@ async def retry_pipeline(company_id: str, db: DbSession, admin_user: AdminUser):
 
 @router.delete("/companies/{company_id}")
 async def delete_company_admin(company_id: str, db: DbSession, _: AdminUser):
-    """删除公司及其关联的审核数据"""
+    """删除公司及其全部关联数据（审核数据、向量库、知识图谱、对象存储、AI 额度预占）"""
     cid = uuid.UUID(company_id)
     result = await db.execute(select(Company).where(Company.id == cid))
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="公司不存在")
+
+    # 数据库行删除后就查不到外部资源引用了，先取出来
+    storage_keys = company_storage_keys(company)
+    reservation_id = company.ai_reservation_id
 
     report_ids = list(
         (
@@ -1147,7 +1155,14 @@ async def delete_company_admin(company_id: str, db: DbSession, _: AdminUser):
     await db.delete(company)
     await db.commit()
 
-    return {"status": "deleted", "company_id": company_id}
+    cleanup = await cleanup_company_external_resources(
+        company_id=str(cid),
+        storage_keys=storage_keys,
+        reservation_id=reservation_id,
+        db=db,
+    )
+
+    return {"status": "deleted", "company_id": company_id, "cleanup": cleanup}
 
 
 # ===== 问答管理 =====

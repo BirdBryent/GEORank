@@ -91,6 +91,25 @@ async def add_entities_and_relations(company_id: str, entities: list[dict], rela
                 )
 
 
+async def delete_company_graph(company_id: str) -> int:
+    """删除某公司的知识图谱节点与关系，返回删除的节点数。
+
+    节点用 company_id 或 id 关联（公司节点用 id，实体节点用 company_id），
+    因此两个属性都要匹配；DETACH DELETE 一并清理关系，避免留下悬挂边。
+    """
+    driver = _new_driver()
+    try:
+        async with driver.session() as session:
+            result = await session.run(
+                "MATCH (n) WHERE n.company_id = $company_id OR n.id = $company_id DETACH DELETE n",
+                company_id=str(company_id),
+            )
+            summary = await result.consume()
+            return int(summary.counters.nodes_deleted)
+    finally:
+        await driver.close()
+
+
 async def get_company_graph(company_id: str) -> dict:
     """获取某公司的完整知识图谱（节点 + 关系）"""
     async with _new_driver() as driver:
