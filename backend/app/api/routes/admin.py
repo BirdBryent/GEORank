@@ -113,7 +113,7 @@ from app.services.ai_usage import (
     store_policy_setting,
     update_admin_user_quota,
 )
-from app.services.ai_client import ai_client
+from app.services.ai_client import ai_client, _thinking_control
 from app.services.content_render import render_markdown
 from app.models.ai_usage import AIPrincipalUser, AIUsageEvent, UserDailyUsage
 
@@ -3645,8 +3645,11 @@ async def test_llm_provider_admin(
             {"role": "user", "content": "Reply with OK only."},
         ],
         "temperature": 0,
-        "max_tokens": 16,
+        "max_tokens": 64,
     }
+    # 与业务链路保持一致：推理模型（DeepSeek 等）关闭思考，否则预算会被 reasoning 吃光，
+    # 正文为空会让体检误报「接口返回空内容」。
+    payload.update(_thinking_control(provider["base_url"]))
     started = time.perf_counter()
     try:
         async with build_provider_http_client(timeout=20.0) as client:
