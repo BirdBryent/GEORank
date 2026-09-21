@@ -2,8 +2,10 @@ FROM mcr.microsoft.com/playwright/python:v1.49.1-jammy@sha256:a34c7c0c74cc5c94f3
 
 WORKDIR /app
 
-# 额外系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 额外系统依赖（apt 源换国内镜像：archive/security.ubuntu.com 在部分网络下
+# 取包失败；仅影响构建期，运行时无关）
+RUN sed -i 's|archive.ubuntu.com/ubuntu|mirrors.tuna.tsinghua.edu.cn/ubuntu|g; s|security.ubuntu.com/ubuntu|mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl && \
     rm -rf /var/lib/apt/lists/*
 
