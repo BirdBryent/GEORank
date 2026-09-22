@@ -12,7 +12,7 @@
     const KB_ALLOWED_EXTENSIONS = new Set(['txt', 'md', 'markdown', 'pdf', 'doc', 'docx']);
     const KB_TEXT_EXTENSIONS = new Set(['txt', 'md', 'markdown']);
     const KB_DOCX_EXTENSIONS = new Set(['docx']);
-    const DEFAULT_BRAND = 'BrandOrbit';
+    const DEFAULT_BRAND = '你的品牌';
     const GENERATE_DELAY = 720;
     const DIRECT_TIMEOUT_MS = 30000;
     const DIRECT_MAX_INPUT_CHARS = 12000;
@@ -521,7 +521,7 @@ BrandOrbit 是面向市场、内容和增长团队的 AI 搜索可见性管理�
     }
 
     function buildJsonLdFromBrief() {
-        const brief = value('#jsonld-brief') || 'BrandOrbit，官网 https://brandorbit.test，AI 搜索可见性管理平台，Logo https://brandorbit.test/logo.png。';
+        const brief = value('#jsonld-brief') || '你的品牌，官网 https://example.com，产品与服务的简要说明，Logo https://example.com/logo.png。';
         const brand = inferBrand(brief);
         const urls = extractUrls(brief);
         const siteUrl = rootUrl(urls[0]) || 'https://example.com';
@@ -557,7 +557,7 @@ BrandOrbit 是面向市场、内容和增长团队的 AI 搜索可见性管理�
     }
 
     function buildLlmsFromBrief() {
-        const brief = value('#llms-brief') || 'BrandOrbit helps teams improve AI search visibility. Core pages: https://brandorbit.test/docs and https://brandorbit.test/cases';
+        const brief = value('#llms-brief') || '你的品牌，官网 https://example.com。核心页面：https://example.com/docs 与 https://example.com/cases。';
         const brand = inferBrand(brief);
         const urls = extractUrls(brief);
         const siteUrl = rootUrl(urls[0]) || 'https://example.com';
@@ -583,7 +583,7 @@ BrandOrbit 是面向市场、内容和增长团队的 AI 搜索可见性管理�
     }
 
     function buildTitlesFromBrief() {
-        const brief = value('#title-brief') || '为 BrandOrbit 生成 GEO服务商 关键词标题，面向 B2B 市场负责人，重点是可执行的 AI 搜索优化方案。';
+        const brief = value('#title-brief') || '为「你的品牌」生成 GEO服务商 关键词标题，面向 B2B 市场负责人，重点是可执行的 AI 搜索优化方案。';
         const brand = inferBrand(brief);
         const keyword = inferKeyword(brief);
         const audience = inferAudience(brief);
@@ -877,7 +877,7 @@ BrandOrbit 是面向市场、内容和增长团队的 AI 搜索可见性管理�
     }
 
     function buildKbFromBrief() {
-        const brief = value('#kb-brief') || 'BrandOrbit 是 AI 搜索可见性管理平台，服务市场团队、内容团队、增长团队。资料页：https://brandorbit.test/docs 和 https://brandorbit.test/cases。常见问题：BrandOrbit 适合谁？适合需要提升 AI 搜索可见性的团队。';
+        const brief = value('#kb-brief') || '你的品牌 是 AI 搜索可见性管理平台，服务市场团队、内容团队、增长团队。资料页：https://example.com/docs 和 https://example.com/cases。常见问题：你的品牌 适合谁？适合需要提升 AI 搜索可见性的团队。';
         const brand = inferBrand(brief);
         const product = inferProduct(brief);
         const audience = inferAudience(brief);
@@ -939,7 +939,7 @@ BrandOrbit 是面向市场、内容和增长团队的 AI 搜索可见性管理�
     }
 
     function buildScoreFromBrief() {
-        const brief = value('#score-brief') || 'https://brandorbit.test 的页面标题是 BrandOrbit GEO Platform，首页首段说明它服务 marketing and content teams，页面包含 FAQ、JSON-LD、案例引用、作者和公司信息。';
+        const brief = value('#score-brief') || 'https://example.com 的页面标题是「你的品牌 GEO Platform」，首页首段说明它服务 marketing and content teams，页面包含 FAQ、JSON-LD、案例引用、作者和公司信息。';
         const brand = inferBrand(brief);
         const urls = extractUrls(brief);
         const signals = [
