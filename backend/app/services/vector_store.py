@@ -130,9 +130,23 @@ class VectorStore:
                     break
         return similar
 
-    def delete_company_vectors(self, company_id: str):
-        """删除某公司的所有向量"""
+    def collection_exists(self) -> bool:
+        """判断向量集合是否已存在。
+
+        与 delete_company_vectors 配合，把「集合还没建」和「向量库不可用」区分开：
+        前者是无需清理，后者才是故障。这里不吞异常，Qdrant 连不上时向上抛。
+        """
+        client = self._get_client()
+        return COLLECTION in [c.name for c in client.get_collections().collections]
+
+    def delete_company_vectors(self, company_id: str) -> bool:
+        """删除某公司的所有向量。
+
+        返回是否真的执行了删除：集合还不存在时返回 False（调用方视为无残留）。
+        """
         from qdrant_client.models import Filter, FieldCondition, MatchValue
+        if not self.collection_exists():
+            return False
         client = self._get_client()
         client.delete(
             collection_name=COLLECTION,
@@ -140,6 +154,7 @@ class VectorStore:
                 must=[FieldCondition(key="company_id", match=MatchValue(value=company_id))]
             ),
         )
+        return True
 
 
 # 全局单例

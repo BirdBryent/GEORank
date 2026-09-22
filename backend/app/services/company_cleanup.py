@@ -66,8 +66,11 @@ async def cleanup_company_external_resources(
     try:
         from app.services.vector_store import vector_store
 
-        vector_store.delete_company_vectors(company_id)
-        result["vectors"] = "deleted"
+        if vector_store.delete_company_vectors(company_id):
+            result["vectors"] = "deleted"
+        else:
+            # 集合还不存在 = 本来就没有向量残留，不是失败
+            result["vectors"] = "skipped:no_collection"
     except Exception as exc:  # 向量库不可用不应阻断公司删除
         result["vectors"] = f"failed:{type(exc).__name__}"
         log_event(
