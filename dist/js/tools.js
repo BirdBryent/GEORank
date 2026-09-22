@@ -420,12 +420,90 @@ BrandOrbit 是面向市场、内容和增长团队的 AI 搜索可见性管理�
         });
     }
 
+    // 生成结果里不该出现的关键词/通用词，避免被当成品牌名（如 "GEO"、"AI"、"Logo"）
+    const BRAND_STOPWORDS = new Set([
+        'AI', 'GEO', 'SEO', 'SEM', 'LLM', 'LLMS', 'JSON', 'LD', 'JSON-LD', 'FAQ', 'FAQS',
+        'URL', 'URLS', 'API', 'APIS', 'HTTP', 'HTTPS', 'WWW', 'COM', 'CN', 'ORG', 'NET', 'IO',
+        'TITLE', 'TITLES', 'BRAND', 'SCHEMA', 'LOGO', 'COMPANY', 'PLATFORM', 'HOME', 'ABOUT',
+        'B2B', 'B2C', 'SAAS', 'PAAS', 'IAAS', 'PDF', 'TXT', 'MD', 'MARKDOWN', 'HTML', 'CSS', 'JS',
+        'KPI', 'ROI', 'CRM', 'CMS', 'CDN', 'SDK', 'GPT', 'OPENAI', 'GOOGLE', 'BING', 'RAG', 'SERP',
+        'UI', 'UX', 'MVP', 'OKR', 'CEO', 'CTO', 'CMO', 'GEO服务商', 'GEO-SERVICE',
+    ]);
+
+    const CN_BRAND_SUFFIX = '科技|技术|网络|数据|智能|软件|信息|传媒|文化|教育|医疗|健康|物流|实业|制造|生物|电子|数码|咨询|集团|股份|研究院|研究所|事务所|实验室|工作室|商城|金融|资本|基金|证券|保险|旅游|酒店|餐饮|能源|环保|汽车|地产|食品|服装';
+
+    // 认不出品牌时的提示：生成结果用中性占位，并让用户知道该怎么写
+    function notifyBrandFallback() {
+        const message = '未识别到品牌名，已用「你的品牌」占位；建议在简介里写明品牌，例如「公司：云梯科技」。';
+        try {
+            const auth = window.GEOrank?.Auth;
+            if (typeof auth?.showToast === 'function') {
+                auth.showToast(message);
+            } else {
+                const hint = document.createElement('div');
+                hint.className = 'auth-toast';
+                hint.textContent = message;
+                document.body.appendChild(hint);
+                window.setTimeout(() => hint.remove(), 4200);
+            }
+        } catch (_) {
+            /* 提示失败不影响生成 */
+        }
+        console.warn('[tools] 未识别到品牌名，已回退到占位：', DEFAULT_BRAND);
+    }
+
+    function isUsableBrand(candidate) {
+        const value = String(candidate || '').trim();
+        if (value.length < 2) return false;
+        return !BRAND_STOPWORDS.has(value.toUpperCase());
+    }
+
+    function cleanBrandCandidate(value) {
+        return String(value || '')
+            .replace(/^[\s"'“”‘’「」『』《》【】（）()]+/, '')
+            // 只在标点处截断，保留英文专名里的空格（Nebula Labs）
+            .replace(/[，,。；;：:、!！?？"'“”‘’「」『』《》【】（）()].*$/, '')
+            .replace(/(官网|网站|站点|首页|页面|地址|链接|的平台|的产品)$/, '')
+            .split('的').pop()
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
     function inferBrand(raw) {
         const text = String(raw || '');
-        const known = text.match(/\b[A-Z][A-Za-z0-9._-]{2,}\b/);
-        if (known?.[0]) return known[0];
-        const explicit = text.match(/(?:品牌|公司|产品|站点|网站)\s*[：:是为叫]?\s*([A-Za-z][A-Za-z0-9._-]{2,}|[\u4e00-\u9fa5A-Za-z0-9]{2,12})/);
-        if (explicit?.[1]) return explicit[1].replace(/[，,。；;\s].*$/, '');
+        // 占位文案本身就算品牌，别再往下猜
+        if (text.includes(DEFAULT_BRAND)) return DEFAULT_BRAND;
+
+        // 1) 「品牌/公司/名称：X」「我们公司叫 X」这类显式写法最可靠
+        const explicit = text.match(/(?:品牌|公司|企业|产品|站点|网站|名称|名字|主体)\s*(?:名称)?\s*[：:是为叫]?\s*([^\s，,。；;：:、!！?？"'“”‘’「」『』《》【】（）()]{2,20})/);
+        const explicitBrand = cleanBrandCandidate(explicit?.[1]);
+        if (isUsableBrand(explicitBrand)) return explicitBrand;
+
+        const spoken = text.match(/(?:我们|我)\s*(?:公司|团队|品牌|产品|平台|网站|站点)?\s*(?:叫|叫做|名为|名称为|是)\s*([^\s，,。；;：:、!！?？"'“”‘’「」『』《》【】（）()]{2,20})/);
+        const spokenBrand = cleanBrandCandidate(spoken?.[1]);
+        if (isUsableBrand(spokenBrand)) return spokenBrand;
+
+        // 2) 引号里的名字：「云梯科技」、"Nebula Labs"
+        const quoted = text.match(/[「『“"《【]\s*([A-Za-z][A-Za-z0-9&._-]{2,30}|[\u4e00-\u9fa5]{2,16})\s*[」』”"》】]/);
+        const quotedBrand = cleanBrandCandidate(quoted?.[1]);
+        if (isUsableBrand(quotedBrand)) return quotedBrand;
+
+        // 3) 中文公司名：云梯科技 / 蓝鲸数据 —— 只认强后缀，避免把「搜索可见性平台」当成品牌
+        const chinese = text.match(new RegExp(`[\\u4e00-\\u9fa5]{2,8}(?:${CN_BRAND_SUFFIX})`));
+        const chineseBrand = cleanBrandCandidate(chinese?.[0]);
+        if (isUsableBrand(chineseBrand)) return chineseBrand;
+
+        // 4) 英文名：跳过 GEO/AI/Logo 这类关键词和域名，优先多词专名（Nebula Labs）
+        const englishMatches = text.match(/(?:^|[\s（(【,，:：])([A-Z][A-Za-z0-9&.-]{1,}(?:\s+[A-Z][A-Za-z0-9&.-]{1,}){0,2})/g) || [];
+        for (const chunk of englishMatches) {
+            const candidate = cleanBrandCandidate(chunk.replace(/^[\s（(【,，:：]+/, ''));
+            if (!isUsableBrand(candidate)) continue;
+            if (/^https?:/i.test(candidate)) continue;
+            if (/\.(com|cn|net|io|org|ai|co|dev|app)$/i.test(candidate)) continue;
+            return candidate;
+        }
+
+        notifyBrandFallback();
         return DEFAULT_BRAND;
     }
 
