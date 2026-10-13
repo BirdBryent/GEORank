@@ -4109,6 +4109,35 @@ ${pages.map(p => p === '…'
 
         rulesButton?.addEventListener('click', () => openDiagnosticRulesModal());
         refreshBtn?.addEventListener('click', () => loadDiagnostics());
+
+        // 关联公司：把未关联的诊断报告按域名回填到已审核通过的公司
+        const linkCompaniesBtn = document.getElementById('diagnostics-link-companies');
+        linkCompaniesBtn?.addEventListener('click', async () => {
+            if (linkCompaniesBtn.disabled) return;
+            const originalHtml = linkCompaniesBtn.innerHTML;
+            linkCompaniesBtn.disabled = true;
+            linkCompaniesBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            linkCompaniesBtn.innerHTML = '<span class="material-symbols-outlined text-sm">progress_activity</span>关联中…';
+            try {
+                const result = await api('POST', '/api/admin/diagnostics/link-companies');
+                const linked = Number(result?.linked || 0);
+                const scanned = Number(result?.scanned || 0);
+                if (linked > 0) {
+                    toast(`已关联 ${linked} 条诊断报告到公司`, 'success');
+                } else if (scanned > 0) {
+                    toast(`扫描 ${scanned} 条未关联报告，没有匹配到已审核通过的公司`, 'warning');
+                } else {
+                    toast('没有需要关联的诊断报告', 'success');
+                }
+                await loadDiagnostics();
+            } catch (err) {
+                toast(err.message, 'error');
+            } finally {
+                linkCompaniesBtn.disabled = false;
+                linkCompaniesBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                linkCompaniesBtn.innerHTML = originalHtml;
+            }
+        });
         detailPanel?.addEventListener('click', async (e) => {
             const retryBtn = e.target.closest('[data-diagnostic-action="retry"]');
             if (retryBtn) {

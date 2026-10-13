@@ -1982,6 +1982,17 @@ async def get_diagnostic_rules_admin(_: AdminUser):
     return await get_diagnostic_rule_config()
 
 
+@router.post("/diagnostics/link-companies")
+async def link_diagnostic_reports_to_companies(db: DbSession, _: AdminUser):
+    """把未关联公司的诊断报告按域名回填到已发布公司（后台「关联公司」按钮）。
+
+    只关联 `publish_status=published` 的公司；同域名多家时取最新创建的那家。
+    """
+    from app.services.diagnostic_link import link_unlinked_reports
+
+    return await link_unlinked_reports(db)
+
+
 @router.put("/diagnostics/rules")
 async def update_diagnostic_rules_admin(
     data: DiagnosticRulesRequest,
