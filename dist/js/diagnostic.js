@@ -178,9 +178,84 @@
         });
     }
 
+    // PDF 报告：后端在 crawler 容器里用 Chromium 渲染，异步任务 + 轮询（与后台一致）
+    const PDF_POLL_INTERVAL_MS = 1500;
+    const PDF_POLL_TIMEOUT_MS = 120000;
+
+    async function downloadReportPdf(reportId, taskId) {
+        const headers = {};
+        const token = getAuthToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/api/diagnostics/${reportId}/export-pdf/${taskId}/download`, { headers });
+        if (!response.ok) {
+            let message = `下载失败 (${response.status})`;
+            try {
+                const data = await response.json();
+                message = data.detail || message;
+            } catch (_) { /* 非 JSON 响应，保留默认文案 */ }
+            throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+        }
+
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `diagnostic-report-${reportId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    }
+
+    async function exportReportPdf() {
+        const reportId = activeReportId;
+        if (!reportId || reportId === DEMO_REPORT?.report_id) {
+            return;
+        }
+
+        const originalHtml = exportBtn.innerHTML;
+        const setBusy = (label) => {
+            exportBtn.disabled = true;
+            exportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            exportBtn.innerHTML = label;
+        };
+        const resetBusy = () => {
+            exportBtn.disabled = false;
+            exportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            exportBtn.innerHTML = originalHtml;
+        };
+
+        setBusy('生成中…');
+        setStatus('正在生成 PDF 报告，通常需要几秒钟…');
+        try {
+            const created = await request(`/api/diagnostics/${reportId}/export-pdf`, { method: 'POST' });
+            const taskId = created?.task_id;
+            if (!taskId) throw new Error('未能创建 PDF 渲染任务');
+
+            let status = created.status || 'pending';
+            const deadline = Date.now() + PDF_POLL_TIMEOUT_MS;
+            while (status !== 'ready' && Date.now() < deadline) {
+                await new Promise((resolve) => window.setTimeout(resolve, PDF_POLL_INTERVAL_MS));
+                const state = await request(`/api/diagnostics/${reportId}/export-pdf/${taskId}`);
+                status = state?.status || 'pending';
+                if (status === 'failed') throw new Error(state.detail || 'PDF 生成失败');
+            }
+            if (status !== 'ready') throw new Error('PDF 生成超时，请稍后重试');
+
+            setBusy('下载中…');
+            await downloadReportPdf(reportId, taskId);
+            setStatus('PDF 报告已导出。', 'success');
+        } catch (error) {
+            setStatus(error.message, 'error');
+        } finally {
+            resetBusy();
+        }
+    }
+
     exportBtn?.addEventListener('click', function () {
         if (exportBtn.disabled) return;
-        window.print();
+        void exportReportPdf();
     });
 
     function getAuthToken() {
