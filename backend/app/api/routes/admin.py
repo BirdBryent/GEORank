@@ -25,6 +25,7 @@ from app.api.routes.auth import _hash_password, _normalize_phone
 from app.core.config import settings
 from app.core.database import engine
 from app.core.deps import DbSession, AdminUser
+from app.core.timeutils import to_utc_iso
 from app.models.company import Company, PublishStatus, PipelineStatus
 from app.services.company_profile import (
     company_profile_missing_fields,
@@ -654,8 +655,8 @@ async def recent_failures(db: DbSession, _: AdminUser, limit: int = 10):
                 "url": company.url,
                 "pipeline_status": company.pipeline_status.value,
                 "pipeline_error": company.pipeline_error,
-                "updated_at": company.updated_at.isoformat(),
-                "created_at": company.created_at.isoformat(),
+                "updated_at": to_utc_iso(company.updated_at),
+                "created_at": to_utc_iso(company.created_at),
             }
             for company in companies
         ],
@@ -665,7 +666,7 @@ async def recent_failures(db: DbSession, _: AdminUser, limit: int = 10):
                 "url": report.url,
                 "status": report.status.value,
                 "error_message": report.error_message,
-                "created_at": report.created_at.isoformat(),
+                "created_at": to_utc_iso(report.created_at),
             }
             for report in diagnostics
         ],
@@ -803,8 +804,8 @@ async def list_companies_admin(
                 "publish_status": c.publish_status.value,
                 "geo_score": c.geo_score,
                 "upvotes": c.upvotes,
-                "created_at": c.created_at.isoformat(),
-                "updated_at": c.updated_at.isoformat(),
+                "created_at": to_utc_iso(c.created_at),
+                "updated_at": to_utc_iso(c.updated_at),
             }
             for c in companies
         ],
@@ -943,11 +944,11 @@ async def get_company_admin_detail(company_id: str, db: DbSession, _: AdminUser)
             "url": latest_report.url,
             "status": latest_report.status.value,
             "overall_score": latest_report.overall_score,
-            "created_at": latest_report.created_at.isoformat(),
+            "created_at": to_utc_iso(latest_report.created_at),
         } if latest_report else None,
         "related_solutions": related_solutions,
-        "created_at": company.created_at.isoformat(),
-        "updated_at": company.updated_at.isoformat(),
+        "created_at": to_utc_iso(company.created_at),
+        "updated_at": to_utc_iso(company.updated_at),
     }
 
 
@@ -1713,7 +1714,7 @@ def _build_diagnostic_report_payload(
         "recommendations": report.recommendations or {},
         "error_message": report.error_message,
         "raw_html_key": report.raw_html_key,
-        "created_at": report.created_at.isoformat(),
+        "created_at": to_utc_iso(report.created_at),
         "rule_config": rules,
     }
 
@@ -1806,7 +1807,7 @@ async def list_diagnostic_reports_admin(
                 "username": user.username if user else None,
                 "user_email": user.email if user else None,
                 "error_message": report.error_message,
-                "created_at": report.created_at.isoformat(),
+                "created_at": to_utc_iso(report.created_at),
             }
         )
 

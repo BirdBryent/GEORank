@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
 from app.core.deps import DbSession, CurrentUser, OptionalUser
+from app.core.timeutils import to_utc_iso
 from app.models.diagnostic import DiagnosticReport, DiagnosticStatus
 from app.services.company_ingest import normalize_company_url
 from app.services.ai_usage import release_ai_access, resolve_async_ai_access
@@ -95,7 +96,7 @@ async def diagnosis_history(db: DbSession, current_user: CurrentUser, page: int 
             "url": r.url,
             "status": r.status.value,
             "overall_score": r.overall_score,
-            "created_at": r.created_at.isoformat(),
+            "created_at": to_utc_iso(r.created_at),
         }
         for r in reports
     ]
@@ -125,7 +126,7 @@ async def get_report(report_id: str, db: DbSession, current_user: OptionalUser):
         "citation_analysis": report.citation_analysis,
         "recommendations": report.recommendations,
         "error_message": report.error_message,
-        "created_at": report.created_at.isoformat(),
+        "created_at": to_utc_iso(report.created_at),
     }
 
 
@@ -171,7 +172,7 @@ async def _report_pdf_payload(report: DiagnosticReport, db: DbSession) -> dict:
         "citation_analysis": report.citation_analysis or {},
         "recommendations": report.recommendations or {},
         "error_message": report.error_message,
-        "created_at": report.created_at.isoformat(),
+        "created_at": to_utc_iso(report.created_at),
         "rule_config": rules,
     }
 

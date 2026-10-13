@@ -18,6 +18,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import async_session
+from app.core.timeutils import to_business_tz
 from app.core.config import settings
 from app.core.deps import DbSession
 from app.models.company import Company, PipelineStatus, PublishStatus
@@ -180,7 +181,8 @@ def _format_short_date(value: datetime | date | None) -> str:
     if not value:
         return "--"
     if isinstance(value, datetime):
-        value = value.date()
+        # 库里是 naive UTC：服务端渲染必须先换成业务时区，否则跨日/跨月会显示错
+        value = (to_business_tz(value) or value).date()
     return value.strftime("%Y/%m")
 
 

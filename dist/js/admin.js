@@ -626,14 +626,34 @@
     }
 
     // ─── 工具函数 ────────────────────────────────────────────────────────────
+    // 后端时间统一为 UTC：库里存 naive UTC，接口出参加 Z。若收到不带时区标记的字符串，
+    // JS 会按本地时区解析（UTC+8 环境下偏早 8 小时），所以这里统一补 Z。
+    function parseApiTime(value) {
+        if (!value) return null;
+        if (value instanceof Date) return value;
+        const text = String(value).trim();
+        if (!text) return null;
+        // 纯日期（如 companies.founded_date 的 2019-05-01）：按日历日期处理，
+        // 不能补 Z —— 否则在西半球时区会退回前一天
+        const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnly) {
+            return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+        }
+        const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+        const parsed = new Date(hasZone ? text : `${text}Z`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
     function formatDate(iso) {
-        if (!iso) return '--';
-        return new Date(iso).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        const date = parseApiTime(iso);
+        if (!date) return '--';
+        return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
     }
 
     function timeAgo(iso) {
-        if (!iso) return '--';
-        const diff = Date.now() - new Date(iso).getTime();
+        const date = parseApiTime(iso);
+        if (!date) return '--';
+        const diff = Date.now() - date.getTime();
         const m = Math.floor(diff / 60000);
         if (m < 1) return '刚刚';
         if (m < 60) return `${m} 分钟前`;
