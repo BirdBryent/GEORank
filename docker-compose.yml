@@ -195,7 +195,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.crawler
     restart: always
-    command: celery -A app.core.celery_app worker -l info -c 2 -Q crawl --hostname=crawler@%h
+    command: celery -A app.core.celery_app worker -l info -c 2 -Q crawl,report --hostname=crawler@%h
     env_file: ${GEORANK_ENV_FILE:-.env}
     volumes:
       - ./backend:/app

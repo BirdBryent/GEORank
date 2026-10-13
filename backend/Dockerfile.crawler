@@ -6,7 +6,7 @@ WORKDIR /app
 # 取包失败；仅影响构建期，运行时无关）
 RUN sed -i 's|archive.ubuntu.com/ubuntu|mirrors.tuna.tsinghua.edu.cn/ubuntu|g; s|security.ubuntu.com/ubuntu|mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list && \
     apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl && \
+    build-essential curl fonts-noto-cjk && \
     rm -rf /var/lib/apt/lists/*
 
 # Python 依赖

@@ -2099,6 +2099,96 @@ async def export_diagnostic_report_admin(
     )
 
 
+# ===== 诊断报告 PDF（异步渲染，走 report 队列 / crawler 容器） =====
+
+def _diagnostic_pdf_filename(report_id: str) -> str:
+    return f"diagnostic-report-{report_id}.pdf"
+
+
+@router.post("/diagnostics/reports/{report_id}/export-pdf")
+async def create_diagnostic_report_pdf(
+    report_id: str,
+    db: DbSession,
+    admin_user: AdminUser,
+):
+    """触发 PDF 报告生成，返回 task_id（渲染在 crawler 容器里跑，需前端轮询）。"""
+    detail = await get_diagnostic_report_admin(report_id, db, admin_user)
+    if detail.get("status") != DiagnosticStatus.COMPLETED.value:
+        raise HTTPException(status_code=409, detail="报告尚未完成，暂不能导出 PDF")
+
+    from app.core.celery_app import celery_app
+
+    try:
+        async_result = celery_app.send_task(
+            "app.tasks.report.render_diagnostic_report_pdf",
+            args=[report_id, detail],
+            queue="report",
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="任务队列不可用，PDF 生成请求未受理")
+
+    return {
+        "task_id": async_result.id,
+        "state": "PENDING",
+        "status": "pending",
+        "filename": _diagnostic_pdf_filename(report_id),
+    }
+
+
+@router.get("/diagnostics/reports/{report_id}/export-pdf/{task_id}")
+async def get_diagnostic_report_pdf_task(
+    report_id: str,
+    task_id: str,
+    _: AdminUser,
+):
+    """查询 PDF 生成任务状态。"""
+    from app.core.celery_app import celery_app
+
+    result = celery_app.AsyncResult(task_id)
+    state = result.state
+    payload: dict[str, Any] = {
+        "task_id": task_id,
+        "state": state,
+        "filename": _diagnostic_pdf_filename(report_id),
+    }
+    if state == "SUCCESS":
+        info = result.result if isinstance(result.result, dict) else {}
+        payload.update({"status": "ready", "size": info.get("size")})
+    elif state == "FAILURE":
+        payload.update({"status": "failed", "detail": str(result.result)[:300]})
+    else:
+        payload.update({"status": "pending"})
+    return payload
+
+
+@router.get("/diagnostics/reports/{report_id}/export-pdf/{task_id}/download")
+async def download_diagnostic_report_pdf(
+    report_id: str,
+    task_id: str,
+    _: AdminUser,
+):
+    """下载已生成的 PDF 报告。"""
+    from app.core.celery_app import celery_app
+    from app.services.storage import storage
+
+    result = celery_app.AsyncResult(task_id)
+    if result.state != "SUCCESS":
+        raise HTTPException(status_code=409, detail="PDF 尚未生成完成")
+
+    info = result.result if isinstance(result.result, dict) else {}
+    key = info.get("key")
+    data = storage.get(key) if key else None
+    if not data:
+        raise HTTPException(status_code=404, detail="PDF 文件不存在或已被清理")
+
+    filename = _diagnostic_pdf_filename(report_id)
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ===== 内容管理 (Wiki) =====
 
 class ContentCreateRequest(BaseModel):

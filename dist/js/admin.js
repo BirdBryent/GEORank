@@ -3816,6 +3816,10 @@ ${pages.map(p => p === '…'
                 <span class="material-symbols-outlined text-sm">data_object</span>
                 导出 JSON
             </button>
+            <button class="btn admin-btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-1.5" data-diagnostic-action="export-pdf" data-id="${detail.id}">
+                <span class="material-symbols-outlined text-sm">picture_as_pdf</span>
+                导出 PDF
+            </button>
             ${detail.status === 'failed' ? `
             <button class="btn btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-1.5" data-diagnostic-action="retry" data-id="${detail.id}">
                 <span class="material-symbols-outlined text-sm">refresh</span>
@@ -3910,6 +3914,55 @@ ${pages.map(p => p === '…'
             toast(`诊断报告已导出为 ${suffix.toUpperCase()}`);
         } catch (err) {
             toast(err.message, 'error');
+        }
+    }
+
+    // PDF 报告：后端在 crawler 容器里用 Chromium 渲染，异步任务 + 轮询
+    const PDF_POLL_INTERVAL_MS = 1500;
+    const PDF_POLL_TIMEOUT_MS = 120000;
+
+    async function exportDiagnosticPdf(reportId, trigger) {
+        if (!reportId) return;
+        const originalHtml = trigger ? trigger.innerHTML : '';
+        const setBusy = (label) => {
+            if (!trigger) return;
+            trigger.disabled = true;
+            trigger.classList.add('opacity-60', 'cursor-not-allowed');
+            trigger.innerHTML = `<span class="material-symbols-outlined text-sm">progress_activity</span>${label}`;
+        };
+        const resetBusy = () => {
+            if (!trigger) return;
+            trigger.disabled = false;
+            trigger.classList.remove('opacity-60', 'cursor-not-allowed');
+            trigger.innerHTML = originalHtml;
+        };
+
+        setBusy('生成中…');
+        try {
+            const created = await api('POST', `/api/admin/diagnostics/reports/${reportId}/export-pdf`);
+            const taskId = created?.task_id;
+            if (!taskId) throw new Error('未能创建 PDF 渲染任务');
+
+            let status = created.status || 'pending';
+            const deadline = Date.now() + PDF_POLL_TIMEOUT_MS;
+            while (status !== 'ready' && Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, PDF_POLL_INTERVAL_MS));
+                const state = await api('GET', `/api/admin/diagnostics/reports/${reportId}/export-pdf/${taskId}`);
+                status = state?.status || 'pending';
+                if (status === 'failed') throw new Error(state.detail || 'PDF 生成失败');
+            }
+            if (status !== 'ready') throw new Error('PDF 生成超时，请稍后在诊断报告里重试');
+
+            setBusy('下载中…');
+            await downloadAuthenticatedFile(
+                `/api/admin/diagnostics/reports/${reportId}/export-pdf/${taskId}/download`,
+                `diagnostic-report-${reportId}.pdf`
+            );
+            toast('诊断报告 PDF 已导出');
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            resetBusy();
         }
     }
 
@@ -4052,6 +4105,12 @@ ${pages.map(p => p === '…'
             const exportJsonBtn = e.target.closest('[data-diagnostic-action="export-json"]');
             if (exportJsonBtn) {
                 await exportDiagnosticReport(exportJsonBtn.dataset.id, 'json');
+                return;
+            }
+
+            const exportPdfBtn = e.target.closest('[data-diagnostic-action="export-pdf"]');
+            if (exportPdfBtn) {
+                await exportDiagnosticPdf(exportPdfBtn.dataset.id, exportPdfBtn);
             }
         });
         await Promise.all([loadDiagnosticRuleConfig(), loadDiagnostics()]);

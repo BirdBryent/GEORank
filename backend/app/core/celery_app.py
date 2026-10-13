@@ -12,6 +12,7 @@ celery_app = Celery(
         "app.tasks.crawl",
         "app.tasks.process",
         "app.tasks.diagnose",
+        "app.tasks.report",
     ],
 )
 
@@ -33,6 +34,8 @@ celery_app.conf.update(
         "app.tasks.crawl.*": {"queue": "crawl"},
         "app.tasks.process.*": {"queue": "process"},
         "app.tasks.diagnose.*": {"queue": "diagnose"},
+        # PDF 报告渲染需要 Chromium，只有 crawler 容器具备
+        "app.tasks.report.*": {"queue": "report"},
     },
     # Beat 定时任务
     beat_schedule={
